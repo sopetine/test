@@ -1,184 +1,146 @@
-document.addEventListener('DOMContentLoaded', () => {
-    const cells = Array.from(document.querySelectorAll('.cell'));
-    const statusDisplay = document.getElementById('status');
-    const resetButton = document.getElementById('reset-btn');
+/* --- Global Styles & Typography --- */
+body {
+    font-family: 'Poppins', sans-serif;
+    background-color: #EAEAEA; /* Light background */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    margin: 0;
+    color: #343A40;
+}
 
-    let board = ['', '', '', '', '', '', '', '', ''];
-    const HUMAN_PLAYER = 'X';
-    const AI_PLAYER = 'O';
-    let gameActive = true;
-    let turn = HUMAN_PLAYER; // X starts
+.game-container {
+    background-color: #FFFFFF;
+    padding: 30px 40px;
+    border-radius: 15px;
+    /* Subtle, modern shadow for depth */
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1), 0 0 0 1px rgba(0, 0, 0, 0.05);
+    text-align: center;
+}
 
-    const winningConditions = [
-        [0, 1, 2], [3, 4, 5], [6, 7, 8],
-        [0, 3, 6], [1, 4, 7], [2, 5, 8],
-        [0, 4, 8], [2, 4, 6]
-    ];
+h1 {
+    font-weight: 700;
+    margin-bottom: 10px;
+    color: #00AEEF; /* Accent color for the title */
+}
 
-    // ==========================================================
-    // Core Minimax Functions
-    // ==========================================================
+/* --- Hint Field Styling --- */
+.hint-field {
+    background-color: #F0F4F8; /* Very light blue/gray background */
+    padding: 10px 15px;
+    border-radius: 8px;
+    margin: 15px 0;
+    font-size: 0.95em;
+    font-weight: 500;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 20px; /* To prevent jumping */
+}
 
-    // Helper function to check for a winner on a given board state
-    function checkWinner(currentBoard, player) {
-        for (let i = 0; i < winningConditions.length; i++) {
-            const [a, b, c] = winningConditions[i];
-            if (currentBoard[a] === player && currentBoard[b] === player && currentBoard[c] === player) {
-                return true;
-            }
-        }
-        return false;
+.hint-label {
+    color: #343A40;
+    margin-right: 8px;
+}
+
+.hint-message {
+    color: #00BFA5; /* Use the X color for emphasis */
+    font-weight: 700;
+    transition: color 0.3s ease;
+}
+
+
+/* --- Board & Cells --- */
+.game-board {
+    display: grid;
+    grid-template-columns: repeat(3, 100px); /* Adjust size as needed */
+    grid-template-rows: repeat(3, 100px);
+    gap: 10px;
+    margin: 20px auto;
+}
+
+.cell {
+    background-color: #F8F9FA;
+    border-radius: 8px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 4em;
+    cursor: pointer;
+    transition: all 0.2s ease-out; /* Super smooth transition base */
+    user-select: none;
+}
+
+/* Hover Effect - The smoothness is here */
+.cell:not(.x):not(.o):hover {
+    background-color: #E6E9EC;
+    transform: translateY(-2px); /* Slight lift */
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+
+/* --- Player Marks & Animation --- */
+.cell.x {
+    color: #00BFA5; /* Teal */
+    font-weight: 600;
+    transform: scale(0.8);
+    opacity: 0;
+    animation: mark-appear 0.3s forwards ease-out;
+}
+
+.cell.o {
+    color: #FF6B6B; /* Coral */
+    font-weight: 600;
+    transform: scale(0.8);
+    opacity: 0;
+    animation: mark-appear 0.3s forwards ease-out;
+}
+
+@keyframes mark-appear {
+    to {
+        transform: scale(1);
+        opacity: 1;
     }
+}
 
-    // Minimax Algorithm - The brain of the hard AI
-    function minimax(newBoard, depth, isMaximizingPlayer) {
-        // Base cases: check for wins, losses, or draw
-        if (checkWinner(newBoard, AI_PLAYER)) {
-            return { score: 10 - depth }; // AI wins (Maximizer)
-        } else if (checkWinner(newBoard, HUMAN_PLAYER)) {
-            return { score: depth - 10 }; // Human wins (Minimizer)
-        } else if (!newBoard.includes('')) {
-            return { score: 0 }; // Draw
-        }
+/* --- Winning Cells (Add this class with JS) --- */
+.cell.win {
+    background-color: rgba(0, 191, 165, 0.2); /* Light transparent highlight */
+    animation: win-pulse 1.5s infinite alternate;
+}
 
-        const availableSpots = newBoard.map((val, index) => (val === '' ? index : null)).filter(val => val !== null);
+@keyframes win-pulse {
+    from { box-shadow: 0 0 15px 5px rgba(0, 191, 165, 0.8); }
+    to { box-shadow: 0 0 5px 2px rgba(0, 191, 165, 0.5); }
+}
 
-        if (isMaximizingPlayer) {
-            let bestScore = -Infinity;
-            let bestMove = null;
+/* --- Hint Cell Highlight (New feature) --- */
+.cell.hint {
+    border: 3px dashed #00AEEF; /* Electric Blue border */
+    background-color: rgba(0, 174, 239, 0.1); /* Slight blue background tint */
+    opacity: 1;
+}
 
-            availableSpots.forEach(index => {
-                newBoard[index] = AI_PLAYER;
-                let score = minimax(newBoard, depth + 1, false).score;
-                newBoard[index] = ''; // Reset spot
-                
-                if (score > bestScore) {
-                    bestScore = score;
-                    bestMove = index;
-                }
-            });
-            return { score: bestScore, index: bestMove };
-        } else {
-            let bestScore = Infinity;
-            let bestMove = null;
+/* --- Buttons and Status --- */
+.reset-button {
+    padding: 12px 25px;
+    font-size: 1em;
+    font-weight: 600;
+    border: none;
+    border-radius: 8px;
+    background-color: #00AEEF; /* Blue accent */
+    color: white;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    margin-top: 15px;
+    box-shadow: 0 4px #009BD8; /* Press-down effect base */
+}
 
-            availableSpots.forEach(index => {
-                newBoard[index] = HUMAN_PLAYER;
-                let score = minimax(newBoard, depth + 1, true).score;
-                newBoard[index] = ''; // Reset spot
+.reset-button:hover {
+    background-color: #009BD8;
+}
 
-                if (score < bestScore) {
-                    bestScore = score;
-                    bestMove = index;
-                }
-            });
-            return { score: bestScore, index: bestMove };
-        }
-    }
-
-    // Function for AI to make a move
-    function aiTurn() {
-        // Use a slight delay for the "super-smooth" modern feel
-        setTimeout(() => {
-            const move = minimax(board, 0, true).index;
-
-            if (move !== null && gameActive) {
-                handleCellPlayed(cells[move], move, AI_PLAYER);
-                handleResultValidation();
-            }
-        }, 500); // 500ms delay for a smooth 'thinking' pause
-    }
-
-    // ==========================================================
-    // Game Flow & UI Functions (Modified)
-    // ==========================================================
-
-    function handleResultValidation() {
-        let winningLine = null;
-
-        // Check for AI Win
-        if (checkWinner(board, AI_PLAYER)) {
-            statusDisplay.innerHTML = 'AI Wins!';
-            gameActive = false;
-            // Find and animate winning line
-            winningConditions.forEach(win => {
-                if (board[win[0]] === AI_PLAYER && board[win[1]] === AI_PLAYER && board[win[2]] === AI_PLAYER) {
-                    winningLine = win;
-                }
-            });
-        }
-        // Check for Human Win
-        else if (checkWinner(board, HUMAN_PLAYER)) {
-            statusDisplay.innerHTML = 'You Win!';
-            gameActive = false;
-            // Find and animate winning line
-            winningConditions.forEach(win => {
-                if (board[win[0]] === HUMAN_PLAYER && board[win[1]] === HUMAN_PLAYER && board[win[2]] === HUMAN_PLAYER) {
-                    winningLine = win;
-                }
-            });
-        }
-        // Check for Draw
-        else if (!board.includes('')) {
-            statusDisplay.innerHTML = 'Game Draw!';
-            gameActive = false;
-        }
-
-        // Apply animation if game is over
-        if (!gameActive && winningLine) {
-             winningLine.forEach(index => {
-                cells[index].classList.add('win');
-            });
-        }
-
-        // If game is still active, change player
-        if (gameActive) {
-            handlePlayerChange();
-        }
-    }
-
-    function handlePlayerChange() {
-        turn = (turn === HUMAN_PLAYER) ? AI_PLAYER : HUMAN_PLAYER;
-
-        if (turn === AI_PLAYER) {
-            statusDisplay.innerHTML = "AI is thinking...";
-            aiTurn();
-        } else {
-            statusDisplay.innerHTML = "Your Turn (X)";
-        }
-    }
-
-    function handleCellPlayed(clickedCell, clickedCellIndex, player) {
-        board[clickedCellIndex] = player;
-        // The class is the lowercase of the player ('x' or 'o')
-        clickedCell.classList.add(player.toLowerCase());
-        clickedCell.innerHTML = player;
-    }
-
-    function handleCellClick(e) {
-        const clickedCell = e.target;
-        const clickedCellIndex = parseInt(clickedCell.getAttribute('data-index'));
-
-        // Only allow human moves if it's their turn and the cell is empty
-        if (board[clickedCellIndex] !== '' || !gameActive || turn !== HUMAN_PLAYER) return;
-
-        handleCellPlayed(clickedCell, clickedCellIndex, HUMAN_PLAYER);
-        handleResultValidation();
-    }
-
-    function handleResetGame() {
-        gameActive = true;
-        turn = HUMAN_PLAYER;
-        board = ['', '', '', '', '', '', '', '', ''];
-        statusDisplay.innerHTML = "Your Turn (X)";
-
-        cells.forEach(cell => {
-            cell.innerHTML = '';
-            cell.classList.remove('x', 'o', 'win');
-        });
-    }
-
-    // --- Event Listeners ---
-    cells.forEach(cell => cell.addEventListener('click', handleCellClick));
-    resetButton.addEventListener('click', handleResetGame);
-});
+.reset-button:active {
+    transform: translateY(4px); /* Press down */
+    box-shadow: 0 0 #009BD8;
+}
