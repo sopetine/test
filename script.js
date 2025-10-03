@@ -1,146 +1,228 @@
-/* --- Global Styles & Typography --- */
-body {
-    font-family: 'Poppins', sans-serif;
-    background-color: #EAEAEA; /* Light background */
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    min-height: 100vh;
-    margin: 0;
-    color: #343A40;
-}
+document.addEventListener('DOMContentLoaded', () => {
+    const cells = Array.from(document.querySelectorAll('.cell'));
+    const statusDisplay = document.getElementById('status');
+    const hintMessage = document.getElementById('hint-message');
+    const resetButton = document.getElementById('reset-btn');
 
-.game-container {
-    background-color: #FFFFFF;
-    padding: 30px 40px;
-    border-radius: 15px;
-    /* Subtle, modern shadow for depth */
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1), 0 0 0 1px rgba(0, 0, 0, 0.05);
-    text-align: center;
-}
+    let board = ['', '', '', '', '', '', '', '', ''];
+    const HUMAN_PLAYER = 'X';
+    const AI_PLAYER = 'O';
+    let gameActive = true;
+    let turn = HUMAN_PLAYER;
 
-h1 {
-    font-weight: 700;
-    margin-bottom: 10px;
-    color: #00AEEF; /* Accent color for the title */
-}
-
-/* --- Hint Field Styling --- */
-.hint-field {
-    background-color: #F0F4F8; /* Very light blue/gray background */
-    padding: 10px 15px;
-    border-radius: 8px;
-    margin: 15px 0;
-    font-size: 0.95em;
-    font-weight: 500;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    min-height: 20px; /* To prevent jumping */
-}
-
-.hint-label {
-    color: #343A40;
-    margin-right: 8px;
-}
-
-.hint-message {
-    color: #00BFA5; /* Use the X color for emphasis */
-    font-weight: 700;
-    transition: color 0.3s ease;
-}
-
-
-/* --- Board & Cells --- */
-.game-board {
-    display: grid;
-    grid-template-columns: repeat(3, 100px); /* Adjust size as needed */
-    grid-template-rows: repeat(3, 100px);
-    gap: 10px;
-    margin: 20px auto;
-}
-
-.cell {
-    background-color: #F8F9FA;
-    border-radius: 8px;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    font-size: 4em;
-    cursor: pointer;
-    transition: all 0.2s ease-out; /* Super smooth transition base */
-    user-select: none;
-}
-
-/* Hover Effect - The smoothness is here */
-.cell:not(.x):not(.o):hover {
-    background-color: #E6E9EC;
-    transform: translateY(-2px); /* Slight lift */
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-}
-
-/* --- Player Marks & Animation --- */
-.cell.x {
-    color: #00BFA5; /* Teal */
-    font-weight: 600;
-    transform: scale(0.8);
-    opacity: 0;
-    animation: mark-appear 0.3s forwards ease-out;
-}
-
-.cell.o {
-    color: #FF6B6B; /* Coral */
-    font-weight: 600;
-    transform: scale(0.8);
-    opacity: 0;
-    animation: mark-appear 0.3s forwards ease-out;
-}
-
-@keyframes mark-appear {
-    to {
-        transform: scale(1);
-        opacity: 1;
+    const winningConditions = [
+        [0, 1, 2], [3, 4, 5], [6, 7, 8],
+        [0, 3, 6], [1, 4, 7], [2, 5, 8],
+        [0, 4, 8], [2, 4, 6]
+    ];
+    
+    // Helper function to map cell index to a user-friendly label
+    function getCellLabel(index) {
+        // Simple 1-9 numbering, left-to-right, top-to-bottom
+        return `Cell ${index + 1}`;
     }
-}
 
-/* --- Winning Cells (Add this class with JS) --- */
-.cell.win {
-    background-color: rgba(0, 191, 165, 0.2); /* Light transparent highlight */
-    animation: win-pulse 1.5s infinite alternate;
-}
+    // ==========================================================
+    // Core Minimax Functions
+    // ==========================================================
 
-@keyframes win-pulse {
-    from { box-shadow: 0 0 15px 5px rgba(0, 191, 165, 0.8); }
-    to { box-shadow: 0 0 5px 2px rgba(0, 191, 165, 0.5); }
-}
+    function checkWinner(currentBoard, player) {
+        for (let i = 0; i < winningConditions.length; i++) {
+            const [a, b, c] = winningConditions[i];
+            if (currentBoard[a] === player && currentBoard[b] === player && currentBoard[c] === player) {
+                return true;
+            }
+        }
+        return false;
+    }
 
-/* --- Hint Cell Highlight (New feature) --- */
-.cell.hint {
-    border: 3px dashed #00AEEF; /* Electric Blue border */
-    background-color: rgba(0, 174, 239, 0.1); /* Slight blue background tint */
-    opacity: 1;
-}
+    // Minimax Algorithm - calculates the best turn locally
+    function minimax(newBoard, depth, isMaximizingPlayer) {
+        // Base cases: scores are calculated based on depth for optimization
+        if (checkWinner(newBoard, AI_PLAYER)) {
+            return { score: 10 - depth }; // AI (Maximizer) wins
+        } else if (checkWinner(newBoard, HUMAN_PLAYER)) {
+            return { score: depth - 10 }; // Human (Minimizer) wins
+        } else if (!newBoard.includes('')) {
+            return { score: 0 }; // Draw
+        }
 
-/* --- Buttons and Status --- */
-.reset-button {
-    padding: 12px 25px;
-    font-size: 1em;
-    font-weight: 600;
-    border: none;
-    border-radius: 8px;
-    background-color: #00AEEF; /* Blue accent */
-    color: white;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    margin-top: 15px;
-    box-shadow: 0 4px #009BD8; /* Press-down effect base */
-}
+        const availableSpots = newBoard.map((val, index) => (val === '' ? index : null)).filter(val => val !== null);
 
-.reset-button:hover {
-    background-color: #009BD8;
-}
+        if (isMaximizingPlayer) {
+            let bestScore = -Infinity;
+            let bestMove = null;
 
-.reset-button:active {
-    transform: translateY(4px); /* Press down */
-    box-shadow: 0 0 #009BD8;
-}
+            availableSpots.forEach(index => {
+                newBoard[index] = AI_PLAYER;
+                let score = minimax(newBoard, depth + 1, false).score;
+                newBoard[index] = '';
+                
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestMove = index;
+                }
+            });
+            return { score: bestScore, index: bestMove };
+        } else {
+            let bestScore = Infinity;
+            let bestMove = null;
+
+            availableSpots.forEach(index => {
+                newBoard[index] = HUMAN_PLAYER;
+                let score = minimax(newBoard, depth + 1, true).score;
+                newBoard[index] = '';
+
+                if (score < bestScore) {
+                    bestScore = score;
+                    bestMove = index;
+                }
+            });
+            return { score: bestScore, index: bestMove };
+        }
+    }
+
+    // ==========================================================
+    // Hint & Turn Logic (FIXED & IMPROVED)
+    // ==========================================================
+
+    function updateHint() {
+        cells.forEach(cell => cell.classList.remove('hint')); // Clear old hint highlight
+
+        if (!gameActive || turn !== HUMAN_PLAYER) {
+            hintMessage.textContent = 'Game Over or AI Turn';
+            return;
+        }
+        
+        hintMessage.textContent = 'Calculating...';
+        
+        // Calculate the best move for the Human Player (HUMAN_PLAYER is the Minimizier's opponent, 
+        // so we run Minimax as the Minimizing player to find the "worst" case for the AI, 
+        // which is the "best" case for the human).
+        // A depth of 0 and isMaximizingPlayer set to 'false' (Minimizer) will search for the best human move.
+        const humanBestMove = minimax(board.slice(), 0, false); 
+        const bestIndex = humanBestMove.index;
+        const bestScore = humanBestMove.score;
+
+        if (bestIndex !== null) {
+            // Apply hint class to the best cell
+            cells[bestIndex].classList.add('hint');
+            
+            let resultMessage = getCellLabel(bestIndex);
+
+            // Give context on the hint score
+            if (bestScore === 0) {
+                resultMessage += ' (Guaranteed Draw)';
+            } else if (bestScore < 0) {
+                resultMessage += ' (Winning Move!)';
+            } else {
+                resultMessage += ' (Best Defensive Move)';
+            }
+            
+            hintMessage.textContent = resultMessage;
+        } else {
+            hintMessage.textContent = 'No available moves.';
+        }
+    }
+
+
+    function aiTurn() {
+        cells.forEach(cell => cell.classList.remove('hint'));
+        hintMessage.textContent = 'AI Turn';
+
+        setTimeout(() => {
+            // AI calculates its move (Maximizing Player)
+            const move = minimax(board.slice(), 0, true).index;
+
+            if (move !== null && gameActive) {
+                handleCellPlayed(cells[move], move, AI_PLAYER);
+                handleResultValidation();
+            }
+        }, 500);
+    }
+
+    function handleResultValidation() {
+        let winningLine = null;
+        let gameOver = false;
+
+        // Check for Win/Loss/Draw
+        if (checkWinner(board, AI_PLAYER) || checkWinner(board, HUMAN_PLAYER) || !board.includes('')) {
+            gameOver = true;
+            if (checkWinner(board, AI_PLAYER)) {
+                statusDisplay.innerHTML = 'AI Wins! 💔';
+            } else if (checkWinner(board, HUMAN_PLAYER)) {
+                statusDisplay.innerHTML = 'You Win! 🎉';
+            } else {
+                statusDisplay.innerHTML = 'Game Draw! 🤝';
+            }
+        }
+
+        if (gameOver) {
+            gameActive = false;
+            // Find winning line for animation
+            winningConditions.forEach(win => {
+                if (board[win[0]] !== '' && board[win[0]] === board[win[1]] && board[win[1]] === board[win[2]]) {
+                    winningLine = win;
+                }
+            });
+            if (winningLine) {
+                 winningLine.forEach(index => {
+                    cells[index].classList.add('win');
+                });
+            }
+            updateHint(); // Final hint update (to "Game Over")
+            return;
+        }
+
+        // If game is still active, change player
+        handlePlayerChange();
+    }
+
+    function handlePlayerChange() {
+        turn = (turn === HUMAN_PLAYER) ? AI_PLAYER : HUMAN_PLAYER;
+
+        if (turn === AI_PLAYER) {
+            statusDisplay.innerHTML = "AI is thinking... 🤔";
+            aiTurn();
+        } else {
+            statusDisplay.innerHTML = "Your Turn (X)";
+            updateHint(); // Show the new hint for the human player
+        }
+    }
+
+    function handleCellPlayed(clickedCell, clickedCellIndex, player) {
+        board[clickedCellIndex] = player;
+        clickedCell.classList.add(player.toLowerCase());
+        clickedCell.innerHTML = player;
+    }
+
+    function handleCellClick(e) {
+        const clickedCellIndex = parseInt(e.target.getAttribute('data-index'));
+
+        if (board[clickedCellIndex] !== '' || !gameActive || turn !== HUMAN_PLAYER) return;
+
+        handleCellPlayed(e.target, clickedCellIndex, HUMAN_PLAYER);
+        handleResultValidation();
+    }
+
+    function handleResetGame() {
+        gameActive = true;
+        turn = HUMAN_PLAYER;
+        board = ['', '', '', '', '', '', '', '', ''];
+        statusDisplay.innerHTML = "Your Turn (X)";
+
+        cells.forEach(cell => {
+            cell.innerHTML = '';
+            cell.classList.remove('x', 'o', 'win', 'hint');
+        });
+        
+        updateHint(); // Show initial hint (FIXED)
+    }
+
+    // --- Event Listeners and Initialization ---
+    cells.forEach(cell => cell.addEventListener('click', handleCellClick));
+    resetButton.addEventListener('click', handleResetGame);
+    
+    // Initial call to set up the status and first hint (FIXED)
+    updateHint();
+});
