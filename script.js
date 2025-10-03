@@ -4,85 +4,173 @@ document.addEventListener('DOMContentLoaded', () => {
     const resetButton = document.getElementById('reset-btn');
 
     let board = ['', '', '', '', '', '', '', '', ''];
-    let currentPlayer = 'X';
+    const HUMAN_PLAYER = 'X';
+    const AI_PLAYER = 'O';
     let gameActive = true;
+    let turn = HUMAN_PLAYER; // X starts
 
-    // --- Winning Conditions ---
     const winningConditions = [
-        [0, 1, 2], [3, 4, 5], [6, 7, 8], // Rows
-        [0, 3, 6], [1, 4, 7], [2, 5, 8], // Columns
-        [0, 4, 8], [2, 4, 6]            // Diagonals
+        [0, 1, 2], [3, 4, 5], [6, 7, 8],
+        [0, 3, 6], [1, 4, 7], [2, 5, 8],
+        [0, 4, 8], [2, 4, 6]
     ];
 
-    // --- Game Logic Functions ---
+    // ==========================================================
+    // Core Minimax Functions
+    // ==========================================================
 
-    function handleResultValidation() {
-        let roundWon = false;
-        let winningLine = null;
-
+    // Helper function to check for a winner on a given board state
+    function checkWinner(currentBoard, player) {
         for (let i = 0; i < winningConditions.length; i++) {
-            const winCondition = winningConditions[i];
-            const a = board[winCondition[0]];
-            const b = board[winCondition[1]];
-            const c = board[winCondition[2]];
-
-            if (a === '' || b === '' || c === '') continue;
-
-            if (a === b && b === c) {
-                roundWon = true;
-                winningLine = winCondition;
-                break;
+            const [a, b, c] = winningConditions[i];
+            if (currentBoard[a] === player && currentBoard[b] === player && currentBoard[c] === player) {
+                return true;
             }
         }
+        return false;
+    }
 
-        if (roundWon) {
-            statusDisplay.innerHTML = `Player ${currentPlayer} Wins!`;
-            gameActive = false;
-            // Apply winning animation/style
-            winningLine.forEach(index => {
-                cells[index].classList.add('win');
-            });
-            return;
+    // Minimax Algorithm - The brain of the hard AI
+    function minimax(newBoard, depth, isMaximizingPlayer) {
+        // Base cases: check for wins, losses, or draw
+        if (checkWinner(newBoard, AI_PLAYER)) {
+            return { score: 10 - depth }; // AI wins (Maximizer)
+        } else if (checkWinner(newBoard, HUMAN_PLAYER)) {
+            return { score: depth - 10 }; // Human wins (Minimizer)
+        } else if (!newBoard.includes('')) {
+            return { score: 0 }; // Draw
         }
 
-        // Check for a Draw
-        if (!board.includes('')) {
+        const availableSpots = newBoard.map((val, index) => (val === '' ? index : null)).filter(val => val !== null);
+
+        if (isMaximizingPlayer) {
+            let bestScore = -Infinity;
+            let bestMove = null;
+
+            availableSpots.forEach(index => {
+                newBoard[index] = AI_PLAYER;
+                let score = minimax(newBoard, depth + 1, false).score;
+                newBoard[index] = ''; // Reset spot
+                
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestMove = index;
+                }
+            });
+            return { score: bestScore, index: bestMove };
+        } else {
+            let bestScore = Infinity;
+            let bestMove = null;
+
+            availableSpots.forEach(index => {
+                newBoard[index] = HUMAN_PLAYER;
+                let score = minimax(newBoard, depth + 1, true).score;
+                newBoard[index] = ''; // Reset spot
+
+                if (score < bestScore) {
+                    bestScore = score;
+                    bestMove = index;
+                }
+            });
+            return { score: bestScore, index: bestMove };
+        }
+    }
+
+    // Function for AI to make a move
+    function aiTurn() {
+        // Use a slight delay for the "super-smooth" modern feel
+        setTimeout(() => {
+            const move = minimax(board, 0, true).index;
+
+            if (move !== null && gameActive) {
+                handleCellPlayed(cells[move], move, AI_PLAYER);
+                handleResultValidation();
+            }
+        }, 500); // 500ms delay for a smooth 'thinking' pause
+    }
+
+    // ==========================================================
+    // Game Flow & UI Functions (Modified)
+    // ==========================================================
+
+    function handleResultValidation() {
+        let winningLine = null;
+
+        // Check for AI Win
+        if (checkWinner(board, AI_PLAYER)) {
+            statusDisplay.innerHTML = 'AI Wins!';
+            gameActive = false;
+            // Find and animate winning line
+            winningConditions.forEach(win => {
+                if (board[win[0]] === AI_PLAYER && board[win[1]] === AI_PLAYER && board[win[2]] === AI_PLAYER) {
+                    winningLine = win;
+                }
+            });
+        }
+        // Check for Human Win
+        else if (checkWinner(board, HUMAN_PLAYER)) {
+            statusDisplay.innerHTML = 'You Win!';
+            gameActive = false;
+            // Find and animate winning line
+            winningConditions.forEach(win => {
+                if (board[win[0]] === HUMAN_PLAYER && board[win[1]] === HUMAN_PLAYER && board[win[2]] === HUMAN_PLAYER) {
+                    winningLine = win;
+                }
+            });
+        }
+        // Check for Draw
+        else if (!board.includes('')) {
             statusDisplay.innerHTML = 'Game Draw!';
             gameActive = false;
-            return;
         }
 
-        // If no win or draw, change player
-        handlePlayerChange();
+        // Apply animation if game is over
+        if (!gameActive && winningLine) {
+             winningLine.forEach(index => {
+                cells[index].classList.add('win');
+            });
+        }
+
+        // If game is still active, change player
+        if (gameActive) {
+            handlePlayerChange();
+        }
     }
 
     function handlePlayerChange() {
-        currentPlayer = currentPlayer === 'X' ? 'O' : 'X';
-        statusDisplay.innerHTML = `Player ${currentPlayer}'s Turn`;
+        turn = (turn === HUMAN_PLAYER) ? AI_PLAYER : HUMAN_PLAYER;
+
+        if (turn === AI_PLAYER) {
+            statusDisplay.innerHTML = "AI is thinking...";
+            aiTurn();
+        } else {
+            statusDisplay.innerHTML = "Your Turn (X)";
+        }
     }
 
-    function handleCellPlayed(clickedCell, clickedCellIndex) {
-        board[clickedCellIndex] = currentPlayer;
-        // Add the player class (X or O) and update the text
-        clickedCell.classList.add(currentPlayer.toLowerCase());
-        clickedCell.innerHTML = currentPlayer;
+    function handleCellPlayed(clickedCell, clickedCellIndex, player) {
+        board[clickedCellIndex] = player;
+        // The class is the lowercase of the player ('x' or 'o')
+        clickedCell.classList.add(player.toLowerCase());
+        clickedCell.innerHTML = player;
     }
 
     function handleCellClick(e) {
         const clickedCell = e.target;
         const clickedCellIndex = parseInt(clickedCell.getAttribute('data-index'));
 
-        if (board[clickedCellIndex] !== '' || !gameActive) return;
+        // Only allow human moves if it's their turn and the cell is empty
+        if (board[clickedCellIndex] !== '' || !gameActive || turn !== HUMAN_PLAYER) return;
 
-        handleCellPlayed(clickedCell, clickedCellIndex);
+        handleCellPlayed(clickedCell, clickedCellIndex, HUMAN_PLAYER);
         handleResultValidation();
     }
 
     function handleResetGame() {
         gameActive = true;
-        currentPlayer = 'X';
+        turn = HUMAN_PLAYER;
         board = ['', '', '', '', '', '', '', '', ''];
-        statusDisplay.innerHTML = `Player X's Turn`;
+        statusDisplay.innerHTML = "Your Turn (X)";
 
         cells.forEach(cell => {
             cell.innerHTML = '';
@@ -93,7 +181,4 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Event Listeners ---
     cells.forEach(cell => cell.addEventListener('click', handleCellClick));
     resetButton.addEventListener('click', handleResetGame);
-
-    // Initial Status
-    statusDisplay.innerHTML = `Player ${currentPlayer}'s Turn`;
 });
