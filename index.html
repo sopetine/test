@@ -1,38 +1,261 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html lang="ru">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Modern Tic-Tac-Toe vs Hard AI</title>
-    <link rel="stylesheet" href="style.css">
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="theme-color" content="#0f1220" />
+  <title>Крестики-нолики — X vs AI</title>
+  <style>
+    :root { --bg:#0f1220; --panel:#161a2b; --muted:#8b94a7; --win:#72eecb; --focus:#2e7de9; }
+    * { box-sizing: border-box }
+    body {
+      margin:0; font:16px/1.5 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial;
+      color:#f7f8ff; background: radial-gradient(1200px 600px at 20% -10%, #1a1f36 0, #0f1220 60%);
+      display:grid; place-items:center; min-height:100dvh; padding:24px;
+    }
+    .app { width:min(92vw, 680px); background:linear-gradient(180deg, #151a2a 0, #0f1220 100%);
+      border:1px solid #212847; border-radius:20px; padding:20px; box-shadow:0 10px 40px rgba(0,0,0,.45); }
+    header { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:14px }
+    h1 { font-size:20px; margin:0 }
+    button {
+      background:#12162a; color:#e7ecff; border:1px solid #263056; border-radius:12px; padding:10px 12px; cursor:pointer;
+      transition:.15s transform,.15s background,.15s border;
+    }
+    button:hover { background:#182042 }
+    button:active { transform: translateY(1px) }
+    button:focus-visible { outline:2px solid var(--focus); outline-offset:2px }
+    .status {
+      display:flex; align-items:center; justify-content:space-between; gap:12px;
+      background:#12162a; border:1px solid #263056; border-radius:14px; padding:10px 12px; margin:12px 0 16px;
+    }
+    .badge { font-weight:700; letter-spacing:.4px; color:#0fe; }
+    .board {
+      display:grid; grid-template-columns:repeat(3,1fr); gap:10px;
+      background:#10142a; border-radius:18px; padding:10px; border:1px solid #1e2546;
+    }
+    .cell {
+      position:relative;
+      aspect-ratio:1/1; display:grid; place-items:center; font-size:clamp(38px, 10vw, 56px);
+      background:#0f1328; border:1px solid #20284a; border-radius:16px; cursor:pointer;
+      transition:.18s transform,.18s background,.18s border,.18s box-shadow;
+      box-shadow: inset 0 0 0 0 rgba(110,231,255,.08);
+      user-select:none;
+    }
+    .cell:hover { transform:translateY(-1px); background:#121736; border-color:#2a3563 }
+    .cell:focus-visible { outline:2px solid var(--focus); outline-offset:2px }
+    .cell.filled { cursor:not-allowed; opacity:.95 }
+    .cell.won { background:#0f1f1a; border-color:#2f7; box-shadow:0 0 0 2px rgba(114,238,203,.25) inset }
+
+    /* Hint dot: shown ONLY when it’s player X turn and this empty cell immediately wins for X */
+    .cell.hint::after {
+      content:""; position:absolute; width:10px; height:10px; border-radius:50%;
+      left:50%; top:50%; transform:translate(-50%,-50%);
+      background:#8be9fd; opacity:.9; box-shadow:0 0 10px rgba(139,233,253,.7);
+    }
+    .legend { color:var(--muted); font-size:14px }
+    .scores { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+    .chip { background:#12162a; border:1px solid #263056; border-radius:999px; padding:6px 10px; font-size:14px; }
+    footer { margin-top:16px; color:var(--muted); font-size:13px; text-align:center }
+
+    .blink { animation:blink .9s linear infinite }
+    @keyframes blink { 50% { opacity:.4 } }
+    @media (prefers-reduced-motion: reduce) {
+      .blink { animation: none }
+      .cell:hover { transform:none }
+      button:active { transform:none }
+    }
+  </style>
 </head>
 <body>
-    <div class="game-container">
-        <h1>Tic-Tac-Toe vs AI (Hard)</h1>
-        
-        <div id="status" class="status-display">Your Turn (X)</div>
+  <div class="app">
+    <header>
+      <h1>🎮 Крестики-нолики — вы (X) против ИИ (O)</h1>
+      <div class="controls">
+        <button id="reset">Новая партия</button>
+        <button id="resetScores" title="Обнулить счёт">Обнулить счёт</button>
+      </div>
+    </header>
 
-        <div id="hint-field" class="hint-field">
-            <span class="hint-label">Next Best Move:</span>
-            <span id="hint-message" class="hint-message">Calculating...</span>
-        </div>
-
-        <div id="board" class="game-board">
-            <div class="cell" data-index="0"></div>
-            <div class="cell" data-index="1"></div>
-            <div class="cell" data-index="2"></div>
-            <div class="cell" data-index="3"></div>
-            <div class="cell" data-index="4"></div>
-            <div class="cell" data-index="5"></div>
-            <div class="cell" data-index="6"></div>
-            <div class="cell" data-index="7"></div>
-            <div class="cell" data-index="8"></div>
-        </div>
-
-        <button id="reset-btn" class="reset-button">Restart Game</button>
+    <div class="status" aria-live="polite">
+      <div>Ход: <span id="turn" class="badge">X</span></div>
+      <div id="message" class="legend">Вы играете за X. Точки видны только на вашем ходу и только там, где ход даёт мгновенную победу.</div>
     </div>
 
-    <script src="script.js"></script>
+    <div id="board" class="board" role="grid" aria-label="Игровое поле 3 на 3"></div>
+
+    <div class="scores">
+      <div class="chip">Побед X: <strong id="sx">0</strong></div>
+      <div class="chip">Побед O: <strong id="so">0</strong></div>
+      <div class="chip">Ничьи: <strong id="sd">0</strong></div>
+    </div>
+
+    <footer>Ходите X. ИИ — O. Подсказки-точки отображают только моментальные победы для X.</footer>
+  </div>
+
+  <script>
+    // --- Game state ---
+    const boardEl = document.getElementById('board');
+    const turnEl = document.getElementById('turn');
+    const msgEl = document.getElementById('message');
+    const resetBtn = document.getElementById('reset');
+    const resetScoresBtn = document.getElementById('resetScores');
+    const sxEl = document.getElementById('sx'), soEl = document.getElementById('so'), sdEl = document.getElementById('sd');
+
+    const WINS = [
+      [0,1,2],[3,4,5],[6,7,8], // rows
+      [0,3,6],[1,4,7],[2,5,8], // cols
+      [0,4,8],[2,4,6]          // diags
+    ];
+
+    let board, current, active, scores, lastWinLine;
+
+    function initState() {
+      board = Array(9).fill('');
+      current = 'X';          // player always starts
+      active = true;
+      lastWinLine = null;
+      msgEl.textContent = 'Ваш ход (X).';
+      updateTurn();
+      render();
+    }
+    function initScores() {
+      scores = { X:0, O:0, D:0 };
+      sxEl.textContent = soEl.textContent = sdEl.textContent = '0';
+    }
+
+    // --- Rendering ---
+    function render() {
+      boardEl.innerHTML = '';
+      const hints = (active && current === 'X') ? winningMovesFor('X') : new Set();
+      for (let i=0;i<9;i++) {
+        const cell = document.createElement('button');
+        cell.className = 'cell' + (board[i] ? ' filled' : '');
+        if (!board[i] && hints.has(i)) cell.classList.add('hint');
+        if (lastWinLine && lastWinLine.includes(i)) cell.classList.add('won');
+        cell.setAttribute('role','gridcell');
+        cell.setAttribute('aria-label', `Клетка ${i+1} ${board[i]||'пусто'}`);
+        cell.dataset.idx = i;
+        cell.textContent = board[i];
+        cell.addEventListener('click', onCellClick);
+        boardEl.appendChild(cell);
+      }
+    }
+    function updateTurn(text) {
+      turnEl.textContent = current;
+      if (text) msgEl.textContent = text;
+    }
+
+    // --- Helpers ---
+    function evaluateBoard(s) {
+      for (const line of WINS) {
+        const [a,b,c] = line;
+        if (s[a] && s[a] === s[b] && s[a] === s[c]) return { winner:s[a], line };
+      }
+      if (s.every(Boolean)) return { winner:'D', line:null };
+      return { winner:null, line:null };
+    }
+
+    function emptyIndices(s = board) {
+      const out = [];
+      for (let i=0;i<9;i++) if (!s[i]) out.push(i);
+      return out;
+    }
+
+    function winningMovesFor(symbol) {
+      const result = new Set();
+      for (const i of emptyIndices()) {
+        const tmp = board.slice();
+        tmp[i] = symbol;
+        const evalRes = evaluateBoard(tmp);
+        if (evalRes.winner === symbol) result.add(i);
+      }
+      return result;
+    }
+
+    // --- Click / moves ---
+    function onCellClick(e) {
+      const i = +e.currentTarget.dataset.idx;
+      if (!active || board[i] || current !== 'X') return; // only player X clicks
+      move(i, 'X');
+      const res = evaluateBoard(board);
+      if (res.winner) return endRound(res);
+
+      // AI move (O)
+      aiTurn();
+    }
+
+    function move(i, symbol) {
+      board[i] = symbol;
+      current = (symbol === 'X') ? 'O' : 'X';
+      render();
+      updateTurn();
+    }
+
+    // --- AI (O) using minimax with alpha-beta ---
+    function aiTurn() {
+      msgEl.textContent = 'Ход ИИ…';
+      turnEl.classList.add('blink');
+      setTimeout(() => {
+        let best = minimax(board.slice(), 'O', -Infinity, Infinity);
+        // Safety: if somehow best.index is invalid, pick a random empty cell
+        if (best.index == null || best.index < 0 || board[best.index]) {
+          const empties = emptyIndices();
+          best = { index: empties[Math.floor(Math.random()*empties.length)] };
+        }
+        move(best.index, 'O');
+        turnEl.classList.remove('blink');
+        const res = evaluateBoard(board);
+        if (res.winner) return endRound(res);
+        updateTurn('Ваш ход (X).');
+      }, 180);
+    }
+
+    function minimax(state, player, alpha, beta) {
+      const res = evaluateBoard(state);
+      if (res.winner === 'O') return { score:+10 };
+      if (res.winner === 'X') return { score:-10 };
+      if (res.winner === 'D') return { score:0 };
+
+      const isMax = (player === 'O');
+      let best = { index:-1, score: isMax ? -Infinity : +Infinity };
+
+      for (let i=0;i<9;i++) if (!state[i]) {
+        state[i] = player;
+        const next = minimax(state, isMax ? 'X' : 'O', alpha, beta);
+        state[i] = '';
+        const move = { index:i, score: next.score };
+
+        if (isMax) {
+          if (move.score > best.score) best = move;
+          alpha = Math.max(alpha, move.score);
+        } else {
+          if (move.score < best.score) best = move;
+          beta = Math.min(beta, move.score);
+        }
+        if (beta <= alpha) break;
+      }
+      return best;
+    }
+
+    function endRound({ winner, line }) {
+      active = false;
+      lastWinLine = line;
+      if (winner === 'D') {
+        msgEl.textContent = 'Ничья 🙃';
+        scores.D++; sdEl.textContent = scores.D;
+      } else {
+        msgEl.textContent = `Победа ${winner}! 🎉`;
+        scores[winner]++; (winner==='X'?sxEl:soEl).textContent = scores[winner];
+      }
+      render();
+    }
+
+    // --- Events & init ---
+    resetBtn.addEventListener('click', () => initState());
+    resetScoresBtn.addEventListener('click', () => { initScores(); initState(); });
+
+    initScores();
+    initState();
+  </script>
 </body>
 </html>
