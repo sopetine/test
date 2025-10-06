@@ -46,7 +46,7 @@
     .cell.filled { cursor:not-allowed; opacity:.95 }
     .cell.won { background:#0f1f1a; border-color:#2f7; box-shadow:0 0 0 2px rgba(114,238,203,.25) inset }
 
-    /* Hint dot: показываем ВСЕГДА в активной партии там, где ход X сразу выигрывает */
+    /* Подсказка-точка: показываем только перед ходом X (если этот ход сразу выигрывает) */
     .cell.hint::after {
       content:""; position:absolute; width:10px; height:10px; border-radius:50%;
       left:50%; top:50%; transform:translate(-50%,-50%);
@@ -78,7 +78,7 @@
 
     <div class="status" aria-live="polite">
       <div>Ход: <span id="turn" class="badge">X</span></div>
-      <div id="message" class="legend">Точки показывают клетки, где ход X мгновенно выигрывает. Подсказки обновляются после каждого хода.</div>
+      <div id="message" class="legend">Точки видны только перед вашим ходом (X) и показывают моментальную победу.</div>
     </div>
 
     <div id="board" class="board" role="grid" aria-label="Игровое поле 3 на 3"></div>
@@ -89,7 +89,7 @@
       <div class="chip">Ничьи: <strong id="sd">0</strong></div>
     </div>
 
-    <footer>Ходите X. ИИ — O. Подсказки-точки видны на протяжении всей активной партии.</footer>
+    <footer>Ходите X. ИИ — O. Подсказки появляются только когда ход X.</footer>
   </div>
 
   <script>
@@ -126,8 +126,8 @@
     // --- Rendering ---
     function render() {
       boardEl.innerHTML = '';
-      // ВАЖНО: подсказки считаем всегда в активной партии, независимо от того, чей сейчас ход
-      const hints = active ? winningMovesFor('X') : new Set();
+      // Подсказки — только когда активная партия и очередь X
+      const hints = (active && current === 'X') ? winningMovesFor('X') : new Set();
 
       for (let i=0;i<9;i++) {
         const cell = document.createElement('button');
@@ -163,7 +163,7 @@
       return out;
     }
 
-    // Подсказка: клетки, где ход X выигрывает сразу
+    // Клетки, где ход X выигрывает сразу
     function winningMovesFor(symbol) {
       const result = new Set();
       for (const i of emptyIndices()) {
@@ -178,19 +178,19 @@
     // --- Click / moves ---
     function onCellClick(e) {
       const i = +e.currentTarget.dataset.idx;
-      if (!active || board[i] || current !== 'X') return; // only player X clicks
+      if (!active || board[i] || current !== 'X') return; // только X ходит кликом
       move(i, 'X');
       const res = evaluateBoard(board);
       if (res.winner) return endRound(res);
 
-      // AI move (O)
+      // ход ИИ (O)
       aiTurn();
     }
 
     function move(i, symbol) {
       board[i] = symbol;
       current = (symbol === 'X') ? 'O' : 'X';
-      render();              // рендер пересчитает подсказки после каждого хода
+      render();              // пересчёт подсказок; при ходе O точки скрыты (current==='O')
       updateTurn();
     }
 
@@ -200,12 +200,12 @@
       turnEl.classList.add('blink');
       setTimeout(() => {
         let best = minimax(board.slice(), 'O', -Infinity, Infinity);
-        // Safety: если вдруг индекс не найден, сделать случайный ход
+        // Safety-фоллбек
         if (best.index == null || best.index < 0 || board[best.index]) {
           const empties = emptyIndices();
           best = { index: empties[Math.floor(Math.random()*empties.length)] };
         }
-        move(best.index, 'O');
+        move(best.index, 'O');     // после хода O станет очередь X → рендер покажет точки
         turnEl.classList.remove('blink');
         const res = evaluateBoard(board);
         if (res.winner) return endRound(res);
@@ -250,7 +250,7 @@
         msgEl.textContent = `Победа ${winner}! 🎉`;
         scores[winner]++; (winner==='X'?sxEl:soEl).textContent = scores[winner];
       }
-      render(); // финальный рендер (подсказки больше не показываются, так как active=false)
+      render(); // финальный рендер; подсказки скрыты (active=false)
     }
 
     // --- Events & init ---
