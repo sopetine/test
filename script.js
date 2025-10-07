@@ -1,228 +1,208 @@
-document.addEventListener('DOMContentLoaded', () => {
-    const cells = Array.from(document.querySelectorAll('.cell'));
-    const statusDisplay = document.getElementById('status');
-    const hintMessage = document.getElementById('hint-message');
-    const resetButton = document.getElementById('reset-btn');
+// --- Elements ---
+const boardEl = document.getElementById('board');
+const turnEl  = document.getElementById('turn');
+const msgEl   = document.getElementById('message');
+const resetBtn = document.getElementById('reset');
+const resetScoresBtn = document.getElementById('resetScores');
+const sxEl = document.getElementById('sx'), soEl = document.getElementById('so'), sdEl = document.getElementById('sd');
+const confettiRoot = document.getElementById('confetti');
 
-    let board = ['', '', '', '', '', '', '', '', ''];
-    const HUMAN_PLAYER = 'X';
-    const AI_PLAYER = 'O';
-    let gameActive = true;
-    let turn = HUMAN_PLAYER;
+// --- Game constants ---
+const WINS = [
+  [0,1,2],[3,4,5],[6,7,8], // rows
+  [0,3,6],[1,4,7],[2,5,8], // cols
+  [0,4,8],[2,4,6]          // diagonals
+];
 
-    const winningConditions = [
-        [0, 1, 2], [3, 4, 5], [6, 7, 8],
-        [0, 3, 6], [1, 4, 7], [2, 5, 8],
-        [0, 4, 8], [2, 4, 6]
-    ];
-    
-    // Helper function to map cell index to a user-friendly label
-    function getCellLabel(index) {
-        // Simple 1-9 numbering, left-to-right, top-to-bottom
-        return `Cell ${index + 1}`;
+// --- State ---
+let board, current, active, scores, lastWinLine;
+
+// --- Init ---
+initScores();
+initState();
+bindEvents();
+
+// --- Functions ---
+function initState(){
+  board = Array(9).fill('');
+  current = 'X'; // player always starts
+  active = true;
+  lastWinLine = null;
+  setMessage('Ваш ход (X).');
+  updateTurn();
+  render();
+}
+
+function initScores(){
+  scores = { X:0, O:0, D:0 };
+  sxEl.textContent = soEl.textContent = sdEl.textContent = '0';
+}
+
+function bindEvents(){
+  resetBtn.addEventListener('click', initState);
+  resetScoresBtn.addEventListener('click', () => { initScores(); initState(); });
+}
+
+function setMessage(t){ msgEl.textContent = t; }
+function updateTurn(){ turnEl.textContent = current; }
+
+function render(){
+  boardEl.innerHTML = '';
+  const hints = (active && current === 'X') ? winningMovesFor('X') : new Set();
+
+  for(let i=0;i<9;i++){
+    const cell = document.createElement('button');
+    cell.className = 'cell' + (board[i] ? ' filled' : '');
+    if(!board[i] && hints.has(i)) cell.classList.add('hint');
+    if (lastWinLine && lastWinLine.includes(i)) cell.classList.add('won');
+    cell.setAttribute('role','gridcell');
+    cell.setAttribute('aria-label', `Клетка ${i+1} ${board[i] || 'пусто'}`);
+    cell.dataset.idx = i;
+
+    const mark = document.createElement('span');
+    mark.className = 'cell__mark';
+    mark.textContent = board[i];
+    cell.appendChild(mark);
+
+    cell.addEventListener('pointerdown', (e) => {
+      const r = e.currentTarget.getBoundingClientRect();
+      e.currentTarget.style.setProperty('--rx', `${e.clientX - r.left}px`);
+      e.currentTarget.style.setProperty('--ry', `${e.clientY - r.top}px`);
+      e.currentTarget.classList.add('ripple');
+      setTimeout(() => e.currentTarget.classList.remove('ripple'), 650);
+    });
+
+    cell.addEventListener('click', onCellClick);
+    boardEl.appendChild(cell);
+  }
+}
+
+function onCellClick(e){
+  const i = +e.currentTarget.dataset.idx;
+  if (!active || board[i] || current !== 'X') return; // Only X clicks
+
+  move(i, 'X');
+  const res = evaluateBoard(board);
+  if (res.winner) return endRound(res);
+
+  // AI move
+  aiTurn();
+}
+
+function move(i, symbol){
+  board[i] = symbol;
+  current = (symbol === 'X') ? 'O' : 'X';
+  render();          // redraw (hides hints when O moves; shows hints when X moves)
+  updateTurn();
+}
+
+function evaluateBoard(s){
+  for (const line of WINS){
+    const [a,b,c] = line;
+    if (s[a] && s[a] === s[b] && s[a] === s[c]) return { winner: s[a], line };
+  }
+  if (s.every(Boolean)) return { winner:'D', line:null };
+  return { winner:null, line:null };
+}
+
+function emptyIndices(s = board){
+  const out = [];
+  for (let i=0;i<9;i++) if (!s[i]) out.push(i);
+  return out;
+}
+
+// Set of indices where placing `symbol` wins immediately
+function winningMovesFor(symbol){
+  const result = new Set();
+  for (const i of emptyIndices()){
+    const tmp = board.slice();
+    tmp[i] = symbol;
+    const r = evaluateBoard(tmp);
+    if (r.winner === symbol) result.add(i);
+  }
+  return result;
+}
+
+// --- AI (O) — minimax with alpha-beta pruning ---
+function aiTurn(){
+  setMessage('Ход ИИ…');
+  turnEl.classList.add('blink');
+  setTimeout(() => {
+    let best = minimax(board.slice(), 'O', -Infinity, Infinity);
+    // Fallback safety
+    if (best.index == null || best.index < 0 || board[best.index]){
+      const empties = emptyIndices();
+      best = { index: empties[Math.floor(Math.random()*empties.length)] };
     }
 
-    // ==========================================================
-    // Core Minimax Functions
-    // ==========================================================
+    move(best.index, 'O');
+    turnEl.classList.remove('blink');
 
-    function checkWinner(currentBoard, player) {
-        for (let i = 0; i < winningConditions.length; i++) {
-            const [a, b, c] = winningConditions[i];
-            if (currentBoard[a] === player && currentBoard[b] === player && currentBoard[c] === player) {
-                return true;
-            }
-        }
-        return false;
+    const res = evaluateBoard(board);
+    if (res.winner) return endRound(res);
+
+    setMessage('Ваш ход (X).');
+  }, 180);
+}
+
+function minimax(state, player, alpha, beta){
+  const res = evaluateBoard(state);
+  if (res.winner === 'O') return { score:+10 };
+  if (res.winner === 'X') return { score:-10 };
+  if (res.winner === 'D') return { score:0 };
+
+  const isMax = (player === 'O');
+  let best = { index:-1, score: isMax ? -Infinity : +Infinity };
+
+  for (let i=0;i<9;i++) if (!state[i]){
+    state[i] = player;
+    const next = minimax(state, isMax ? 'X' : 'O', alpha, beta);
+    state[i] = '';
+    const move = { index:i, score: next.score };
+
+    if (isMax){
+      if (move.score > best.score) best = move;
+      alpha = Math.max(alpha, move.score);
+    } else {
+      if (move.score < best.score) best = move;
+      beta = Math.min(beta, move.score);
     }
+    if (beta <= alpha) break;
+  }
+  return best;
+}
 
-    // Minimax Algorithm - calculates the best turn locally
-    function minimax(newBoard, depth, isMaximizingPlayer) {
-        // Base cases: scores are calculated based on depth for optimization
-        if (checkWinner(newBoard, AI_PLAYER)) {
-            return { score: 10 - depth }; // AI (Maximizer) wins
-        } else if (checkWinner(newBoard, HUMAN_PLAYER)) {
-            return { score: depth - 10 }; // Human (Minimizer) wins
-        } else if (!newBoard.includes('')) {
-            return { score: 0 }; // Draw
-        }
+function endRound({ winner, line }){
+  active = false;
+  lastWinLine = line;
 
-        const availableSpots = newBoard.map((val, index) => (val === '' ? index : null)).filter(val => val !== null);
+  if (winner === 'D'){
+    setMessage('Ничья 🙃');
+    scores.D++; sdEl.textContent = scores.D;
+  } else {
+    setMessage(`Победа ${winner}! 🎉`);
+    scores[winner]++; (winner === 'X' ? sxEl : soEl).textContent = scores[winner];
+    fireConfetti(winner === 'X' ? '#70ffc3' : '#84d8ff');
+  }
+  render(); // final draw (no hints when inactive)
+}
 
-        if (isMaximizingPlayer) {
-            let bestScore = -Infinity;
-            let bestMove = null;
-
-            availableSpots.forEach(index => {
-                newBoard[index] = AI_PLAYER;
-                let score = minimax(newBoard, depth + 1, false).score;
-                newBoard[index] = '';
-                
-                if (score > bestScore) {
-                    bestScore = score;
-                    bestMove = index;
-                }
-            });
-            return { score: bestScore, index: bestMove };
-        } else {
-            let bestScore = Infinity;
-            let bestMove = null;
-
-            availableSpots.forEach(index => {
-                newBoard[index] = HUMAN_PLAYER;
-                let score = minimax(newBoard, depth + 1, true).score;
-                newBoard[index] = '';
-
-                if (score < bestScore) {
-                    bestScore = score;
-                    bestMove = index;
-                }
-            });
-            return { score: bestScore, index: bestMove };
-        }
-    }
-
-    // ==========================================================
-    // Hint & Turn Logic (FIXED & IMPROVED)
-    // ==========================================================
-
-    function updateHint() {
-        cells.forEach(cell => cell.classList.remove('hint')); // Clear old hint highlight
-
-        if (!gameActive || turn !== HUMAN_PLAYER) {
-            hintMessage.textContent = 'Game Over or AI Turn';
-            return;
-        }
-        
-        hintMessage.textContent = 'Calculating...';
-        
-        // Calculate the best move for the Human Player (HUMAN_PLAYER is the Minimizier's opponent, 
-        // so we run Minimax as the Minimizing player to find the "worst" case for the AI, 
-        // which is the "best" case for the human).
-        // A depth of 0 and isMaximizingPlayer set to 'false' (Minimizer) will search for the best human move.
-        const humanBestMove = minimax(board.slice(), 0, false); 
-        const bestIndex = humanBestMove.index;
-        const bestScore = humanBestMove.score;
-
-        if (bestIndex !== null) {
-            // Apply hint class to the best cell
-            cells[bestIndex].classList.add('hint');
-            
-            let resultMessage = getCellLabel(bestIndex);
-
-            // Give context on the hint score
-            if (bestScore === 0) {
-                resultMessage += ' (Guaranteed Draw)';
-            } else if (bestScore < 0) {
-                resultMessage += ' (Winning Move!)';
-            } else {
-                resultMessage += ' (Best Defensive Move)';
-            }
-            
-            hintMessage.textContent = resultMessage;
-        } else {
-            hintMessage.textContent = 'No available moves.';
-        }
-    }
-
-
-    function aiTurn() {
-        cells.forEach(cell => cell.classList.remove('hint'));
-        hintMessage.textContent = 'AI Turn';
-
-        setTimeout(() => {
-            // AI calculates its move (Maximizing Player)
-            const move = minimax(board.slice(), 0, true).index;
-
-            if (move !== null && gameActive) {
-                handleCellPlayed(cells[move], move, AI_PLAYER);
-                handleResultValidation();
-            }
-        }, 500);
-    }
-
-    function handleResultValidation() {
-        let winningLine = null;
-        let gameOver = false;
-
-        // Check for Win/Loss/Draw
-        if (checkWinner(board, AI_PLAYER) || checkWinner(board, HUMAN_PLAYER) || !board.includes('')) {
-            gameOver = true;
-            if (checkWinner(board, AI_PLAYER)) {
-                statusDisplay.innerHTML = 'AI Wins! 💔';
-            } else if (checkWinner(board, HUMAN_PLAYER)) {
-                statusDisplay.innerHTML = 'You Win! 🎉';
-            } else {
-                statusDisplay.innerHTML = 'Game Draw! 🤝';
-            }
-        }
-
-        if (gameOver) {
-            gameActive = false;
-            // Find winning line for animation
-            winningConditions.forEach(win => {
-                if (board[win[0]] !== '' && board[win[0]] === board[win[1]] && board[win[1]] === board[win[2]]) {
-                    winningLine = win;
-                }
-            });
-            if (winningLine) {
-                 winningLine.forEach(index => {
-                    cells[index].classList.add('win');
-                });
-            }
-            updateHint(); // Final hint update (to "Game Over")
-            return;
-        }
-
-        // If game is still active, change player
-        handlePlayerChange();
-    }
-
-    function handlePlayerChange() {
-        turn = (turn === HUMAN_PLAYER) ? AI_PLAYER : HUMAN_PLAYER;
-
-        if (turn === AI_PLAYER) {
-            statusDisplay.innerHTML = "AI is thinking... 🤔";
-            aiTurn();
-        } else {
-            statusDisplay.innerHTML = "Your Turn (X)";
-            updateHint(); // Show the new hint for the human player
-        }
-    }
-
-    function handleCellPlayed(clickedCell, clickedCellIndex, player) {
-        board[clickedCellIndex] = player;
-        clickedCell.classList.add(player.toLowerCase());
-        clickedCell.innerHTML = player;
-    }
-
-    function handleCellClick(e) {
-        const clickedCellIndex = parseInt(e.target.getAttribute('data-index'));
-
-        if (board[clickedCellIndex] !== '' || !gameActive || turn !== HUMAN_PLAYER) return;
-
-        handleCellPlayed(e.target, clickedCellIndex, HUMAN_PLAYER);
-        handleResultValidation();
-    }
-
-    function handleResetGame() {
-        gameActive = true;
-        turn = HUMAN_PLAYER;
-        board = ['', '', '', '', '', '', '', '', ''];
-        statusDisplay.innerHTML = "Your Turn (X)";
-
-        cells.forEach(cell => {
-            cell.innerHTML = '';
-            cell.classList.remove('x', 'o', 'win', 'hint');
-        });
-        
-        updateHint(); // Show initial hint (FIXED)
-    }
-
-    // --- Event Listeners and Initialization ---
-    cells.forEach(cell => cell.addEventListener('click', handleCellClick));
-    resetButton.addEventListener('click', handleResetGame);
-    
-    // Initial call to set up the status and first hint (FIXED)
-    updateHint();
-});
+// --- Confetti (tiny & fast) ---
+function fireConfetti(color){
+  const N = 36;
+  for (let i=0;i<N;i++){
+    const s = document.createElement('span');
+    s.className = 'confetti';
+    const left = Math.random()*100;
+    const delay = Math.random()*0.15;
+    const dur = 0.9 + Math.random()*0.6;
+    s.style.left = left + 'vw';
+    s.style.background = color;
+    s.style.transform = `translateY(0) rotate(${Math.random()*360}deg)`;
+    s.style.animationDuration = dur + 's';
+    s.style.animationDelay = delay + 's';
+    s.style.filter = `hue-rotate(${Math.floor(Math.random()*60)-30}deg)`;
+    confettiRoot.appendChild(s);
+    setTimeout(() => s.remove(), (delay + dur) * 1000 + 120);
+  }
+}
