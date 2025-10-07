@@ -1,264 +1,236 @@
-<!doctype html>
-<html lang="ru">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <meta name="theme-color" content="#0f1220" />
-  <title>Крестики-нолики — X vs AI</title>
-  <style>
-    :root { --bg:#0f1220; --panel:#161a2b; --muted:#8b94a7; --win:#72eecb; --focus:#2e7de9; }
-    * { box-sizing: border-box }
-    body {
-      margin:0; font:16px/1.5 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial;
-      color:#f7f8ff; background: radial-gradient(1200px 600px at 20% -10%, #1a1f36 0, #0f1220 60%);
-      display:grid; place-items:center; min-height:100dvh; padding:24px;
-    }
-    .app { width:min(92vw, 680px); background:linear-gradient(180deg, #151a2a 0, #0f1220 100%);
-      border:1px solid #212847; border-radius:20px; padding:20px; box-shadow:0 10px 40px rgba(0,0,0,.45); }
-    header { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:14px }
-    h1 { font-size:20px; margin:0 }
-    button {
-      background:#12162a; color:#e7ecff; border:1px solid #263056; border-radius:12px; padding:10px 12px; cursor:pointer;
-      transition:.15s transform,.15s background,.15s border;
-    }
-    button:hover { background:#182042 }
-    button:active { transform: translateY(1px) }
-    button:focus-visible { outline:2px solid var(--focus); outline-offset:2px }
-    .status {
-      display:flex; align-items:center; justify-content:space-between; gap:12px;
-      background:#12162a; border:1px solid #263056; border-radius:14px; padding:10px 12px; margin:12px 0 16px;
-    }
-    .badge { font-weight:700; letter-spacing:.4px; color:#0fe; }
-    .board {
-      display:grid; grid-template-columns:repeat(3,1fr); gap:10px;
-      background:#10142a; border-radius:18px; padding:10px; border:1px solid #1e2546;
-    }
-    .cell {
-      position:relative;
-      aspect-ratio:1/1; display:grid; place-items:center; font-size:clamp(38px, 10vw, 56px);
-      background:#0f1328; border:1px solid #20284a; border-radius:16px; cursor:pointer;
-      transition:.18s transform,.18s background,.18s border,.18s box-shadow;
-      box-shadow: inset 0 0 0 0 rgba(110,231,255,.08);
-      user-select:none;
-    }
-    .cell:hover { transform:translateY(-1px); background:#121736; border-color:#2a3563 }
-    .cell:focus-visible { outline:2px solid var(--focus); outline-offset:2px }
-    .cell.filled { cursor:not-allowed; opacity:.95 }
-    .cell.won { background:#0f1f1a; border-color:#2f7; box-shadow:0 0 0 2px rgba(114,238,203,.25) inset }
+:root{
+  --bg:#0e1222;
+  --panel:#121733;
+  --panel-2:#0c1126;
+  --muted:#9aa4bd;
+  --text:#eaf1ff;
+  --accent:#84d8ff;
+  --accent-2:#70ffc3;
+  --warn:#ffcf70;
+  --focus:#4a90ff;
+  --ring: rgba(132,216,255,.55);
+  --shadow: 0 10px 40px rgba(0,0,0,.45);
+  --radius: 18px;
+  --speed: .18s;
+}
 
-    /* Подсказка-точка: показываем только перед ходом X (если этот ход сразу выигрывает) */
-    .cell.hint::after {
-      content:""; position:absolute; width:10px; height:10px; border-radius:50%;
-      left:50%; top:50%; transform:translate(-50%,-50%);
-      background:#8be9fd; opacity:.9; box-shadow:0 0 10px rgba(139,233,253,.7);
-    }
-    .legend { color:var(--muted); font-size:14px }
-    .scores { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
-    .chip { background:#12162a; border:1px solid #263056; border-radius:999px; padding:6px 10px; font-size:14px; }
-    footer { margin-top:16px; color:var(--muted); font-size:13px; text-align:center }
+*{ box-sizing:border-box }
 
-    .blink { animation:blink .9s linear infinite }
-    @keyframes blink { 50% { opacity:.4 } }
-    @media (prefers-reduced-motion: reduce) {
-      .blink { animation: none }
-      .cell:hover { transform:none }
-      button:active { transform:none }
-    }
-  </style>
-</head>
-<body>
-  <div class="app">
-    <header>
-      <h1>🎮 Крестики-нолики — вы (X) против ИИ (O)</h1>
-      <div class="controls">
-        <button id="reset">Новая партия</button>
-        <button id="resetScores" title="Обнулить счёт">Обнулить счёт</button>
-      </div>
-    </header>
+html, body{
+  height:100%;
+}
 
-    <div class="status" aria-live="polite">
-      <div>Ход: <span id="turn" class="badge">X</span></div>
-      <div id="message" class="legend">Точки видны только перед вашим ходом (X) и показывают моментальную победу.</div>
-    </div>
+body{
+  margin:0;
+  color:var(--text);
+  font:16px/1.5 ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  background:
+    radial-gradient(1200px 600px at 20% -10%, #1a2040 0, var(--bg) 60%),
+    radial-gradient(800px 500px at 120% 120%, #11224a 0, transparent 60%),
+    var(--bg);
+  display:grid;
+  place-items:center;
+  padding:24px;
+}
 
-    <div id="board" class="board" role="grid" aria-label="Игровое поле 3 на 3"></div>
+/* --- Card --- */
+.app{
+  width:min(96vw, 780px);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,0) 20%),
+    linear-gradient(180deg, #141a3b 0, var(--panel-2) 100%);
+  border: 1px solid #1d2550;
+  border-radius: calc(var(--radius) + 4px);
+  padding:22px;
+  box-shadow: var(--shadow);
+  position:relative;
+  overflow:hidden;
+  isolation:isolate;
+}
 
-    <div class="scores">
-      <div class="chip">Побед X: <strong id="sx">0</strong></div>
-      <div class="chip">Побед O: <strong id="so">0</strong></div>
-      <div class="chip">Ничьи: <strong id="sd">0</strong></div>
-    </div>
+.app::before{
+  /* soft neon top glow */
+  content:"";
+  position:absolute; inset:-60% -60% auto -60%;
+  height:40%;
+  background: radial-gradient(70% 70% at 50% 100%, rgba(132,216,255,.15), transparent 60%);
+  filter: blur(18px);
+  pointer-events:none;
+  z-index:0;
+}
 
-    <footer>Ходите X. ИИ — O. Подсказки появляются только когда ход X.</footer>
-  </div>
+.app__header{
+  z-index:1;
+  display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px;
+}
 
-  <script>
-    // --- Game state ---
-    const boardEl = document.getElementById('board');
-    const turnEl = document.getElementById('turn');
-    const msgEl = document.getElementById('message');
-    const resetBtn = document.getElementById('reset');
-    const resetScoresBtn = document.getElementById('resetScores');
-    const sxEl = document.getElementById('sx'), soEl = document.getElementById('so'), sdEl = document.getElementById('sd');
+.app__title{
+  margin:0;
+  font-size: clamp(18px, 4vw, 22px);
+  font-weight:700;
+  letter-spacing:.2px;
+}
 
-    const WINS = [
-      [0,1,2],[3,4,5],[6,7,8], // rows
-      [0,3,6],[1,4,7],[2,5,8], // cols
-      [0,4,8],[2,4,6]          // diags
-    ];
+.app__footer{
+  margin-top:18px;
+  color:var(--muted);
+  font-size:13px;
+  text-align:center;
+}
 
-    let board, current, active, scores, lastWinLine;
+/* --- Controls --- */
+.controls{ display:flex; gap:10px; flex-wrap:wrap }
+.btn{
+  --bg:#151c42;
+  background: var(--bg);
+  color: var(--text);
+  border:1px solid #243268;
+  padding:10px 12px;
+  border-radius: 12px;
+  cursor:pointer;
+  transition: transform var(--speed), background var(--speed), border var(--speed), box-shadow var(--speed);
+  box-shadow: 0 0 0 0 var(--ring);
+  position:relative;
+  overflow:hidden;
+}
+.btn:hover{ background:#192453; border-color:#2d3d7f }
+.btn:active{ transform: translateY(1px) }
+.btn:focus-visible{ outline:2px solid var(--focus); outline-offset:2px }
+.btn--ghost{ background:transparent; border-color:#253061 }
+.btn--ghost:hover{ background:#121a3f }
 
-    function initState() {
-      board = Array(9).fill('');
-      current = 'X';          // player always starts
-      active = true;
-      lastWinLine = null;
-      msgEl.textContent = 'Ваш ход (X).';
-      updateTurn();
-      render();
-    }
-    function initScores() {
-      scores = { X:0, O:0, D:0 };
-      sxEl.textContent = soEl.textContent = sdEl.textContent = '0';
-    }
+/* --- Status --- */
+.status{
+  z-index:1;
+  display:flex; align-items:center; justify-content:space-between; gap:12px;
+  background:#0f1431;
+  border:1px solid #1f2a63;
+  border-radius: 14px;
+  padding:10px 12px; margin:12px 0 16px;
+  box-shadow: inset 0 0 0 1px rgba(132,216,255,.05);
+}
+.badge{
+  display:inline-block;
+  min-width:1.6em; text-align:center;
+  padding:.12em .38em;
+  border-radius:10px;
+  font-weight:800;
+  letter-spacing:.5px;
+  color:#001d2a;
+  background: linear-gradient(180deg, var(--accent), #54bfff);
+  box-shadow: 0 1px 0 rgba(255,255,255,.15) inset, 0 0 8px rgba(132,216,255,.45);
+}
+.status__msg{ color:var(--muted); font-size:14px }
 
-    // --- Rendering ---
-    function render() {
-      boardEl.innerHTML = '';
-      // Подсказки — только когда активная партия и очередь X
-      const hints = (active && current === 'X') ? winningMovesFor('X') : new Set();
+/* --- Board --- */
+.board-wrap{ perspective: 1200px; }
+.board{
+  display:grid; grid-template-columns:repeat(3,1fr); gap:12px;
+  background:#0f1431; border:1px solid #1f2a63; border-radius: var(--radius);
+  padding:12px;
+  transform: rotateX(0.0001deg); /* force GPU layer */
+  box-shadow: inset 0 0 0 1px rgba(132,216,255,.05), 0 10px 30px rgba(0,0,0,.25);
+}
+.cell{
+  position:relative;
+  aspect-ratio:1/1;
+  display:grid; place-items:center;
+  font-size: clamp(40px, 11vw, 64px);
+  letter-spacing:.02em;
+  color:#e8f6ff;
+  background: linear-gradient(180deg, #0e1434 0, #0b132c 100%);
+  border:1px solid #223070;
+  border-radius: 16px;
+  cursor:pointer;
+  user-select:none;
+  transition: transform var(--speed), background var(--speed), border var(--speed), box-shadow var(--speed), filter var(--speed);
+  box-shadow: inset 0 0 0 0 rgba(132,216,255,.08);
+  overflow:hidden;
+}
+.cell:hover{
+  transform: translateY(-1px);
+  background:#111a42;
+  border-color:#2b3f90;
+  box-shadow: 0 0 0 2px rgba(132,216,255,.15) inset;
+}
+.cell.filled{ cursor:not-allowed; opacity:.98 }
+.cell.won{
+  background: radial-gradient(60% 60% at 50% 40%, rgba(112,255,195,.18), transparent 60%), #0f1f29;
+  border-color:#2effb8;
+  box-shadow: 0 0 0 2px rgba(112,255,195,.3) inset, 0 0 24px rgba(112,255,195,.18);
+  filter: saturate(1.1);
+}
 
-      for (let i=0;i<9;i++) {
-        const cell = document.createElement('button');
-        cell.className = 'cell' + (board[i] ? ' filled' : '');
-        if (!board[i] && hints.has(i)) cell.classList.add('hint');
-        if (lastWinLine && lastWinLine.includes(i)) cell.classList.add('won');
-        cell.setAttribute('role','gridcell');
-        cell.setAttribute('aria-label', `Клетка ${i+1} ${board[i]||'пусто'}`);
-        cell.dataset.idx = i;
-        cell.textContent = board[i];
-        cell.addEventListener('click', onCellClick);
-        boardEl.appendChild(cell);
-      }
-    }
-    function updateTurn(text) {
-      turnEl.textContent = current;
-      if (text) msgEl.textContent = text;
-    }
+/* Flip-in mark */
+.cell__mark{
+  transform: rotateX(90deg);
+  transition: transform .28s cubic-bezier(.2,.8,.2,1);
+  will-change: transform;
+}
+.cell.filled .cell__mark{ transform: rotateX(0) }
 
-    // --- Helpers ---
-    function evaluateBoard(s) {
-      for (const line of WINS) {
-        const [a,b,c] = line;
-        if (s[a] && s[a] === s[b] && s[a] === s[c]) return { winner:s[a], line };
-      }
-      if (s.every(Boolean)) return { winner:'D', line:null };
-      return { winner:null, line:null };
-    }
+/* Ripple on click */
+.cell::before{
+  content:"";
+  position:absolute; inset:0;
+  background: radial-gradient(120px 120px at var(--rx,50%) var(--ry,50%), rgba(132,216,255,.22), transparent 60%);
+  transform: scale(0);
+  opacity:0; pointer-events:none;
+}
+.cell.ripple::before{
+  animation: ripple .6s ease-out forwards;
+}
+@keyframes ripple{
+  0%{ transform: scale(.2); opacity:.45 }
+  100%{ transform: scale(1); opacity:0 }
+}
 
-    function emptyIndices(s = board) {
-      const out = [];
-      for (let i=0;i<9;i++) if (!s[i]) out.push(i);
-      return out;
-    }
+/* Hint dot (instant win for X) — visible only when current === X */
+.cell.hint::after{
+  content:"";
+  position:absolute; width:10px; height:10px; border-radius:50%;
+  left:50%; top:50%; transform: translate(-50%,-50%);
+  background: var(--accent);
+  box-shadow: 0 0 10px rgba(132,216,255,.9), 0 0 22px rgba(132,216,255,.45);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+@keyframes pulse{
+  50%{ transform: translate(-50%,-50%) scale(1.15); box-shadow: 0 0 14px rgba(132,216,255,.95), 0 0 28px rgba(132,216,255,.55); }
+}
 
-    // Клетки, где ход X выигрывает сразу
-    function winningMovesFor(symbol) {
-      const result = new Set();
-      for (const i of emptyIndices()) {
-        const tmp = board.slice();
-        tmp[i] = symbol;
-        const evalRes = evaluateBoard(tmp);
-        if (evalRes.winner === symbol) result.add(i);
-      }
-      return result;
-    }
+/* Chips */
+.scores{ display:flex; gap:10px; flex-wrap:wrap; margin-top:14px }
+.chip{
+  background:#0e1536;
+  border:1px solid #223070;
+  border-radius:999px;
+  padding:8px 12px;
+  font-size:14px;
+  color:var(--text);
+}
 
-    // --- Click / moves ---
-    function onCellClick(e) {
-      const i = +e.currentTarget.dataset.idx;
-      if (!active || board[i] || current !== 'X') return; // только X ходит кликом
-      move(i, 'X');
-      const res = evaluateBoard(board);
-      if (res.winner) return endRound(res);
+/* Confetti */
+#confetti{
+  position:fixed; inset:0; pointer-events:none; overflow:hidden; z-index:999;
+}
+.confetti{
+  position:absolute; top:-10px; width:10px; height:14px; opacity:0.95;
+  transform: rotate(0deg);
+  animation: fall linear forwards;
+}
+@keyframes fall{
+  to{
+    transform: translateY(110vh) rotate(720deg);
+    opacity: 1;
+  }
+}
 
-      // ход ИИ (O)
-      aiTurn();
-    }
+/* Utility */
+.blink{ animation: blink .9s linear infinite }
+@keyframes blink{ 50%{ opacity:.4 } }
 
-    function move(i, symbol) {
-      board[i] = symbol;
-      current = (symbol === 'X') ? 'O' : 'X';
-      render();              // пересчёт подсказок; при ходе O точки скрыты (current==='O')
-      updateTurn();
-    }
-
-    // --- AI (O) using minimax with alpha-beta ---
-    function aiTurn() {
-      msgEl.textContent = 'Ход ИИ…';
-      turnEl.classList.add('blink');
-      setTimeout(() => {
-        let best = minimax(board.slice(), 'O', -Infinity, Infinity);
-        // Safety-фоллбек
-        if (best.index == null || best.index < 0 || board[best.index]) {
-          const empties = emptyIndices();
-          best = { index: empties[Math.floor(Math.random()*empties.length)] };
-        }
-        move(best.index, 'O');     // после хода O станет очередь X → рендер покажет точки
-        turnEl.classList.remove('blink');
-        const res = evaluateBoard(board);
-        if (res.winner) return endRound(res);
-        updateTurn('Ваш ход (X).');
-      }, 180);
-    }
-
-    function minimax(state, player, alpha, beta) {
-      const res = evaluateBoard(state);
-      if (res.winner === 'O') return { score:+10 };
-      if (res.winner === 'X') return { score:-10 };
-      if (res.winner === 'D') return { score:0 };
-
-      const isMax = (player === 'O');
-      let best = { index:-1, score: isMax ? -Infinity : +Infinity };
-
-      for (let i=0;i<9;i++) if (!state[i]) {
-        state[i] = player;
-        const next = minimax(state, isMax ? 'X' : 'O', alpha, beta);
-        state[i] = '';
-        const move = { index:i, score: next.score };
-
-        if (isMax) {
-          if (move.score > best.score) best = move;
-          alpha = Math.max(alpha, move.score);
-        } else {
-          if (move.score < best.score) best = move;
-          beta = Math.min(beta, move.score);
-        }
-        if (beta <= alpha) break;
-      }
-      return best;
-    }
-
-    function endRound({ winner, line }) {
-      active = false;
-      lastWinLine = line;
-      if (winner === 'D') {
-        msgEl.textContent = 'Ничья 🙃';
-        scores.D++; sdEl.textContent = scores.D;
-      } else {
-        msgEl.textContent = `Победа ${winner}! 🎉`;
-        scores[winner]++; (winner==='X'?sxEl:soEl).textContent = scores[winner];
-      }
-      render(); // финальный рендер; подсказки скрыты (active=false)
-    }
-
-    // --- Events & init ---
-    resetBtn.addEventListener('click', () => initState());
-    resetScoresBtn.addEventListener('click', () => { initScores(); initState(); });
-
-    initScores();
-    initState();
-  </script>
-</body>
-</html>
+@media (prefers-reduced-motion: reduce){
+  .blink, .cell.ripple::before, .cell__mark, .cell.hint::after{ animation: none }
+  .cell:hover{ transform:none }
+  .btn:active{ transform:none }
+}
